@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fio-shared-read-test
+spec:
+  completions: 10
+  parallelism: 10
+  template:
+    spec:
+      containers:
+      - name: fio
+        image: ljishen/fio
+        command: ["fio"]
+        args:
+          # CRITICAL: All pods read THE SAME FILE
+          - "--name=shared-read"
+          - "--directory=/data"
+          - "--filename=shared-model.dat" 
+          - "--size=100M"
+          - "--rw=read"                    
+          - "--bs=256k"                    # Large blocks
+          - "--numjobs=4"
+          - "--iodepth=8"
+          - "--ioengine=libaio"
+          - "--direct=0"               
+          - "--runtime=60"
+          - "--time_based"
+          - "--group_reporting"
+        volumeMounts:
+        - name: rwx-vol
+          mountPath: /data
+      volumes:
+      - name: rwx-vol
+        persistentVolumeClaim:
+          claimName: longhorn-rwx-pvc
+      restartPolicy: Never
