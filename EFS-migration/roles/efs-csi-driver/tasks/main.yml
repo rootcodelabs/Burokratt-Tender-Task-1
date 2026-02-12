@@ -1,0 +1,31 @@
+---
+- name: Add AWS EFS CSI Driver Helm repository
+  kubernetes.core.helm_repository:
+    name: aws-efs-csi-driver
+    repo_url: https://kubernetes-sigs.github.io/aws-efs-csi-driver/
+
+- name: Update Helm repositories
+  kubernetes.core.helm_repository:
+    name: aws-efs-csi-driver
+    repo_url: https://kubernetes-sigs.github.io/aws-efs-csi-driver/
+    force_update: yes
+
+- name: Install AWS EFS CSI Driver
+  kubernetes.core.helm:
+    name: aws-efs-csi-driver
+    chart_ref: aws-efs-csi-driver/aws-efs-csi-driver
+    release_namespace: kube-system
+    create_namespace: false
+    values:
+      image:
+        repository: "602401143452.dkr.ecr.{{ aws_region }}.amazonaws.com/eks/aws-efs-csi-driver"
+      controller:
+        serviceAccount:
+          create: true
+          name: efs-csi-controller-sa
+    wait: true
+    wait_timeout: 5m
+
+- name: Display CSI Driver status
+  debug:
+    msg: "EFS CSI Driver installed successfully.

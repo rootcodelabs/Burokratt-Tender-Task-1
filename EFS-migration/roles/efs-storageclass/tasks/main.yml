@@ -1,0 +1,17 @@
+---
+- name: Create EFS StorageClass from template
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'storageclass.yaml.j2') }}"
+  register: storageclass_result
+
+- name: Verify StorageClass creation
+  kubernetes.core.k8s_info:
+    kind: StorageClass
+    name: "{{ storageclass_name }}"
+  register: sc_info
+
+- name: Display StorageClass status
+  debug:
+    msg: "StorageClass '{{ storageclass_name }}' created successfully"
+  when: sc_info.resources | length > 0

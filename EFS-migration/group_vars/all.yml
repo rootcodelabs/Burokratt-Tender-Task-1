@@ -1,0 +1,45 @@
+---
+# AWS Configuration
+aws_region: "us-east-1"  # Change to your AWS region
+vpc_id: "vpc-xxxxx"      # REQUIRED: Your VPC ID
+subnet_ids:              # REQUIRED: Your subnet IDs (use private subnets)
+  - "subnet-xxxxx"
+  - "subnet-yyyyy"
+  - "subnet-zzzzz"
+worker_security_group_id: "sg-xxxxx"   #REQUIRED: worker nodes security group ID
+
+# EFS Configuration
+efs_performance_mode: "generalPurpose"
+efs_throughput_mode: "bursting"
+efs_encrypted: true
+efs_name: "kubernetes-shared-storage"
+
+# Kubernetes Configuration
+k8s_namespace: "production"   # Change to target namespace
+
+# Storage Configuration
+storageclass_name: "aws-efs-rwx"
+efs_base_path: "/dynamic_provisioning"
+directory_perms: "700"
+gid_range_start: "1000"
+gid_range_end: "2000"
+
+# Application Configuration
+apps_to_migrate:
+  - name: "trainbot"                 # Change to your app name
+    namespace: "production"          # Change to your namespace
+    old_pvc: "pvc-trainbot-models"   # REQUIRED: Source Longhorn PVC name
+    new_pvc: "trainbot-models-efs"   # Target EFS PVC name
+    storage_size: "500Mi"            # Adjust storage size
+    deployment_name: "trainbot"      # REQUIRED: Deployment name to scale down
+    replicas: 3                      # Original replica count (for reference)
+    mount_path: "/models"            # Volume mount path in container
+    container_name: "trainbot"       # Container name
+    image: "example/trainbot:latest" # Container image
+# Terraform Configuration
+terraform_dir: "/tmp/efs-terraform"    # Can change to preferred location
+terraform_state_backend: "local"  
+
+# Migration Configuration
+migration_timeout: 3600  # seconds
+validation_wait_time: 120  # seconds

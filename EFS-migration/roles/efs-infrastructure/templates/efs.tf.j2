@@ -1,0 +1,68 @@
+variable "vpc_id" {
+  description = "VPC ID where EFS will be deployed"
+  type        = string
+  default     = "{{ vpc_id }}"
+}
+
+variable "subnet_ids" {
+  description = "List of subnet IDs for EFS mount targets"
+  type        = list(string)
+  default     = {{ subnet_ids | to_json }}
+}
+
+variable "worker_security_group_id" {
+  description = "Security group ID of Kubernetes worker nodes"
+  type        = string
+  default     = "{{ worker_security_group_id }}"
+}
+
+resource "aws_efs_file_system" "kubernetes_shared" {
+  creation_token   = "{{ efs_name }}"
+  performance_mode = "{{ efs_performance_mode }}"
+  throughput_mode  = "{{ efs_throughput_mode }}"
+  encrypted        = {{ efs_encrypted | lower }}
+
+  tags = {
+    Name        = "{{ efs_name }}"
+    Environment = "production"
+    ManagedBy   = "Ansible"
+  }
+}
+
+resource "aws_security_group" "efs_mount" {
+  name        = "efs-mount-sg"
+  description = "Security group for EFS mount targets"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description     = "NFS from Kubernetes workers"
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [var.worker_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name      = "efs-mount-sg"
+    ManagedBy = "Ansible"
+  }
+}
+
+resource "aws_efs_mount_target" "kubernetes_shared" {
+  count           = length(var.subnet_ids)
+  file_system_id  = aws_efs_file_system.kubernetes_shared.id
+  subnet_id       = var.subnet_ids[count.index]
+  security_groups = [aws_security_group.efs_mount.id]
+}
+
+output "efs_filesystem_id" {
+  description = "EFS Filesystem ID for Kubernetes StorageClass"
+  value       = aws_efs_file_system.kubernetes_shared.id
+}

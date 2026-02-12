@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-{{ item.name }}-data
+  namespace: {{ item.namespace }}
+spec:
+  template:
+    spec:
+      containers:
+      - name: rsync
+        image: alpine:3.18
+        command:
+          - /bin/sh
+          - -c
+          - |
+            apk add --no-cache rsync
+            echo "Starting data migration for {{ item.name }}..."
+            rsync -avh --progress --stats /source/ /destination/
+            echo "Migration complete. Verifying..."
+            SRC_COUNT=$(find /source -type f | wc -l)
+            DST_COUNT=$(find /destination -type f | wc -l)
+            echo "Source files: $SRC_COUNT"
+            echo "Destination files: $DST_COUNT"
+            if [ "$SRC_COUNT" -eq "$DST_COUNT" ]; then
+              echo "✓ File count matches"
+              exit 0
+            else
+              echo "✗ File count mismatch"
+              exit 1
+            fi
+        volumeMounts:
+        - name: source-volume
+          mountPath: /source
+          readOnly: true
+        - name: destination-volume
+          mountPath: /destination
+      volumes:
+      - name: source-volume
+        persistentVolumeClaim:
+          claimName: {{ item.old_pvc }}
+      - name: destination-volume
+        persistentVolumeClaim:
+          claimName: {{ item.new_pvc }}
+      restartPolicy: Never
+  backoffLimit: 3

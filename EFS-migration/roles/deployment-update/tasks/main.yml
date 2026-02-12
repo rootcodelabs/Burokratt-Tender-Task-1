@@ -1,0 +1,70 @@
+---
+- name: Update PVC reference in deployment using kubectl set
+  command: >
+    kubectl set volume deployment/{{ item.deployment_name }}
+    -n {{ item.namespace }}
+    --add
+    --name=storage-volume
+    --type=persistentVolumeClaim
+    --claim-name={{ item.new_pvc }}
+    --mount-path={{ item.mount_path }}
+    --overwrite
+  loop: "{{ apps_to_migrate }}"
+  register: deployment_update
+
+- name: Scale applications back to original replica count
+  kubernetes.core.k8s_scale:
+    kind: Deployment
+    name: "{{ item.deployment_name }}"
+    namespace: "{{ item.namespace }}"
+    replicas: "{{ item.replicas }}"
+    wait: true
+    wait_timeout: 300
+  loop: "{{ apps_to_migrate }}"
+
+- name: Wait for pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ item.namespace }}"
+    label_selectors:
+      - "app={{ item.name }}"
+  register: pod_status
+  until: >
+    pod_status.resources | length == item.replicas and
+    pod_status.resources | selectattr('status.phase', 'equalto', 'Running') | list | length == item.replicas
+  retries: 60
+  delay: 5
+  loop: "{{ apps_to_migrate }}"
+
+- name: Verify all containers are ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: "{{ item.deployment_name }}"
+    namespace: "{{ item.namespace }}"
+  register: deployment_status
+  loop: "{{ apps_to_migrate }}"
+
+- name: Display deployment status
+  debug:
+    msg: |
+      Deployment: {{ item.item.deployment_name }}
+      Namespace: {{ item.item.namespace }}
+      Ready Replicas: {{ item.resources[0].status.readyReplicas | default(0) }}/{{ item.item.replicas }}
+      Status: {% if item.resources[0].status.readyReplicas | default(0) == item.item.replicas %}✓ Healthy{% else %}⚠ Not Ready{% endif %}
+  loop: "{{ deployment_status.results }}"
+  loop_control:
+    label: "{{ item.item.deployment_name }}"
+
+- name: Verify new PVC is mounted
+  command: >
+    kubectl exec -n {{ item.namespace }}
+    deployment/{{ item.deployment_name }}
+    -- df -h {{ item.mount_path }}
+  register: mount_verification
+  loop: "{{ apps_to_migrate }}"
+  changed_when: false
+  failed_when: false
+
+- name: Display mount verification
+  debug:
+    msg: "{{ mount_verification.results | map(attribute='stdout_lines') | list }}"

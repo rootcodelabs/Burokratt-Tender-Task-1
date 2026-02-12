@@ -1,0 +1,59 @@
+---
+- name: Create EFS-backed PVCs for applications
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'efs-pvc.yaml.j2') }}"
+  loop: "{{ apps_to_migrate }}"
+  register: pvc_creation
+
+- name: Wait for PVCs to be bound
+  kubernetes.core.k8s_info:
+    kind: PersistentVolumeClaim
+    name: "{{ item.new_pvc }}"
+    namespace: "{{ item.namespace }}"
+  register: pvc_status
+  until: pvc_status.resources[0].status.phase == 'Bound'
+  retries: 30
+  delay: 5
+  loop: "{{ apps_to_migrate }}"
+
+- name: Scale down applications before migration
+  kubernetes.core.k8s_scale:
+    kind: Deployment
+    name: "{{ item.deployment_name }}"
+    namespace: "{{ item.namespace }}"
+    replicas: 0
+    wait: true
+    wait_timeout: 300
+  loop: "{{ apps_to_migrate }}"
+
+- name: Create data migration jobs
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'migration-job.yaml.j2') }}"
+  loop: "{{ apps_to_migrate }}"
+
+- name: Wait for migration jobs to complete
+  kubernetes.core.k8s_info:
+    kind: Job
+    name: "migrate-{{ item.name }}-data"
+    namespace: "{{ item.namespace }}"
+  register: job_status
+  until: >
+    job_status.resources | length > 0 and
+    job_status.resources[0].status.succeeded is defined and
+    job_status.resources[0].status.succeeded == 1
+  retries: "{{ (migration_timeout / 30) | int }}"
+  delay: 30
+  loop: "{{ apps_to_migrate }}"
+
+- name: Get migration job logs
+  command: >
+    kubectl logs -n {{ item.namespace }} job/migrate-{{ item.name }}-data
+  register: migration_logs
+  loop: "{{ apps_to_migrate }}"
+  changed_when: false
+
+- name: Display migration results
+  debug:
+    msg: "{{ migration_logs.results | map(attribute='stdout_lines') | list }}"

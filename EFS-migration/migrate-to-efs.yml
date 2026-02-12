@@ -1,0 +1,94 @@
+---
+- name: Migrate Kubernetes Storage from Longhorn to AWS EFS
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - group_vars/all.yml
+
+  pre_tasks:
+    - name: Verify required tools are installed
+      command: "{{ item }} --version"
+      loop:
+        - kubectl
+        - helm
+        - terraform
+        - aws
+      changed_when: false
+      failed_when: false
+      register: tool_check
+
+    - name: Display tool check results
+      debug:
+        msg: "{{ tool_check.results | map(attribute='stdout_lines') | list }}"
+
+    - name: Verify AWS credentials
+      command: aws sts get-caller-identity
+      changed_when: false
+      register: aws_identity
+
+    - name: Display AWS identity
+      debug:
+        msg: "Connected to AWS as: {{ (aws_identity.stdout | from_json).Arn }}"
+
+    - name: Verify kubectl context
+      command: kubectl config current-context
+      changed_when: false
+      register: k8s_context_check
+
+    - name: Display Kubernetes context
+      debug:
+        msg: "Using Kubernetes context: {{ k8s_context_check.stdout }}"
+
+  tasks:
+    - name: Step 1 - Install AWS EFS CSI Driver
+      include_role:
+        name: efs-csi-driver
+      tags:
+        - csi-driver
+        - step1
+
+    - name: Step 2 - Create EFS Infrastructure with Terraform
+      include_role:
+        name: efs-infrastructure
+      tags:
+        - efs-infra
+        - step2
+
+    - name: Step 3 - Create EFS StorageClass
+      include_role:
+        name: efs-storageclass
+      tags:
+        - storageclass
+        - step3
+
+    - name: Step 4 - Migrate Data from Longhorn to EFS
+      include_role:
+        name: data-migration
+      tags:
+        - migration
+        - step4
+
+    - name: Step 5 - Update Deployments and Scale Up Applications
+      include_role:
+        name: deployment-update
+      tags:
+        - deployment-update
+        - step5
+
+  post_tasks:
+    - name: Display migration summary
+      debug:
+        msg: |
+          ========================================
+          Migration Complete!
+          ========================================
+          EFS Filesystem ID: {{ efs_filesystem_id }}
+          StorageClass: {{ storageclass_name }}
+          
+          Migrated Applications:
+          {% for app in apps_to_migrate %}
+          - {{ app.name }} ({{ app.namespace }})
+            Old PVC: {{ app.old_pvc }}
+            New PVC: {{ app.new_pvc }}
+          {% endfor %}
+          

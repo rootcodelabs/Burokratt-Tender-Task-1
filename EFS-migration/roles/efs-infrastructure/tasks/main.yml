@@ -1,0 +1,47 @@
+---
+- name: Create Terraform working directory
+  file:
+    path: "{{ terraform_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Generate Terraform configuration from template
+  template:
+    src: efs.tf.j2
+    dest: "{{ terraform_dir }}/efs.tf"
+    mode: '0644'
+
+- name: Initialize Terraform
+  community.general.terraform:
+    project_path: "{{ terraform_dir }}"
+    state: present
+    force_init: true
+  register: terraform_init
+
+- name: Apply Terraform configuration
+  community.general.terraform:
+    project_path: "{{ terraform_dir }}"
+    state: present
+  register: terraform_apply
+
+- name: Extract EFS Filesystem ID from Terraform output
+  command: terraform output -raw efs_filesystem_id
+  args:
+    chdir: "{{ terraform_dir }}"
+  register: efs_id_output
+  changed_when: false
+
+- name: Set EFS Filesystem ID as fact
+  set_fact:
+    efs_filesystem_id: "{{ efs_id_output.stdout }}"
+
+- name: Save EFS Filesystem ID to file
+  copy:
+    content: "{{ efs_filesystem_id }}"
+    dest: "{{ terraform_dir }}/efs-filesystem-id.txt"
+    mode: '0644'
+
+- name: Display EFS Filesystem ID
+  debug:
+    msg: "EFS Filesystem created successfully. ID: {{ efs_filesystem_id }}"
+
