@@ -1,0 +1,151 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fio-metadata-test
+spec:
+  completions: 3
+  parallelism: 3
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: fio-metadata-test
+    spec:
+      restartPolicy: Never
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: fio-metadata-test
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: fio
+        image: ljishen/fio
+        command: ["fio"]
+        args:
+          - "--name=metadata-test"
+          - "--directory=/data"
+          - "--filename_format=f.$(HOSTNAME).$jobnum.$filenum"
+          - "--rw=randwrite"
+          - "--bs=4k"
+          - "--size=4k"
+          - "--filesize=4k"
+          - "--nrfiles=1000"
+          - "--openfiles=100"
+          - "--numjobs=4"              
+          - "--ioengine=libaio"
+          - "--iodepth=16"             
+          - "--direct=1"
+          - "--runtime=60"
+          - "--time_based"
+          - "--create_on_open=1"
+          - "--group_reporting"
+        volumeMounts:
+        - name: rwx-vol
+          mountPath: /data
+      volumes:
+      - name: rwx-vol
+        persistentVolumeClaim:
+          claimName: rwx-pvc
+
+
+==============================
+RESULTS FROM pod/fio-metadata-test-fcx8v
+==============================
+metadata-test: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=libaio, iodepth=16
+...
+fio-3.6
+Starting 4 processes
+
+metadata-test: (groupid=0, jobs=4): err= 0: pid=10: Thu Feb  5 06:36:52 2026
+  write: IOPS=380, BW=1523KiB/s (1560kB/s)(89.3MiB/60012msec)
+    slat (msec): min=4, max=190, avg=10.09, stdev= 5.29
+    clat (usec): min=6, max=802574, avg=156685.84, stdev=69199.95
+     lat (msec): min=22, max=830, avg=166.78, stdev=71.05
+    clat percentiles (msec):
+     |  1.00th=[  104],  5.00th=[  113], 10.00th=[  118], 20.00th=[  126],
+     | 30.00th=[  133], 40.00th=[  140], 50.00th=[  146], 60.00th=[  153],
+     | 70.00th=[  159], 80.00th=[  169], 90.00th=[  184], 95.00th=[  211],
+     | 99.00th=[  609], 99.50th=[  651], 99.90th=[  743], 99.95th=[  751],
+     | 99.99th=[  793]
+   bw (  KiB/s): min=   72, max=  552, per=25.13%, avg=382.53, stdev=94.93, samples=476
+   iops        : min=   18, max=  138, avg=95.50, stdev=23.77, samples=476
+  lat (usec)   : 10=0.02%
+  lat (msec)   : 50=0.03%, 100=0.41%, 250=96.45%, 500=1.52%, 750=1.51%
+  lat (msec)   : 1000=0.07%
+  cpu          : usr=0.15%, sys=0.46%, ctx=58592, majf=0, minf=53
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.2%, 16=99.7%, 32=0.0%, >=64=0.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.1%, 32=0.0%, 64=0.0%, >=64=0.0%
+     issued rwts: total=0,22849,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=16
+
+Run status group 0 (all jobs):
+  WRITE: bw=1523KiB/s (1560kB/s), 1523KiB/s-1523KiB/s (1560kB/s-1560kB/s), io=89.3MiB (93.6MB), run=60012-60012msec
+==============================
+RESULTS FROM pod/fio-metadata-test-mngm6
+==============================
+metadata-test: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=libaio, iodepth=16
+...
+fio-3.6
+Starting 4 processes
+
+metadata-test: (groupid=0, jobs=4): err= 0: pid=10: Thu Feb  5 06:36:49 2026
+  write: IOPS=338, BW=1354KiB/s (1387kB/s)(79.4MiB/60005msec)
+    slat (msec): min=5, max=225, avg=11.36, stdev= 6.23
+    clat (usec): min=7, max=832212, avg=176385.59, stdev=72451.46
+     lat (msec): min=6, max=852, avg=187.75, stdev=74.46
+    clat percentiles (msec):
+     |  1.00th=[  115],  5.00th=[  126], 10.00th=[  132], 20.00th=[  140],
+     | 30.00th=[  148], 40.00th=[  155], 50.00th=[  163], 60.00th=[  171],
+     | 70.00th=[  180], 80.00th=[  190], 90.00th=[  215], 95.00th=[  251],
+     | 99.00th=[  592], 99.50th=[  667], 99.90th=[  751], 99.95th=[  785],
+     | 99.99th=[  818]
+   bw (  KiB/s): min=   72, max=  487, per=25.10%, avg=339.92, stdev=83.27, samples=476
+   iops        : min=   18, max=  121, avg=84.81, stdev=20.83, samples=476
+  lat (usec)   : 10=0.02%
+  lat (msec)   : 10=0.01%, 20=0.02%, 50=0.09%, 100=0.12%, 250=94.71%
+  lat (msec)   : 500=3.23%, 750=1.67%, 1000=0.12%
+  cpu          : usr=0.20%, sys=0.60%, ctx=52338, majf=0, minf=57
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.2%, 16=99.7%, 32=0.0%, >=64=0.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.1%, 32=0.0%, 64=0.0%, >=64=0.0%
+     issued rwts: total=0,20314,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=16
+
+Run status group 0 (all jobs):
+  WRITE: bw=1354KiB/s (1387kB/s), 1354KiB/s-1354KiB/s (1387kB/s-1387kB/s), io=79.4MiB (83.2MB), run=60005-60005msec
+==============================
+RESULTS FROM pod/fio-metadata-test-zhkgv
+==============================
+metadata-test: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=libaio, iodepth=16
+...
+fio-3.6
+Starting 4 processes
+
+metadata-test: (groupid=0, jobs=4): err= 0: pid=10: Thu Feb  5 06:36:38 2026
+  write: IOPS=333, BW=1334KiB/s (1366kB/s)(78.2MiB/60071msec)
+    slat (msec): min=4, max=420, avg=11.05, stdev= 8.70
+    clat (usec): min=8, max=1024.4k, avg=178701.46, stdev=102904.17
+     lat (msec): min=12, max=1037, avg=189.75, stdev=103.90
+    clat percentiles (msec):
+     |  1.00th=[  109],  5.00th=[  120], 10.00th=[  126], 20.00th=[  136],
+     | 30.00th=[  144], 40.00th=[  150], 50.00th=[  159], 60.00th=[  165],
+     | 70.00th=[  174], 80.00th=[  190], 90.00th=[  220], 95.00th=[  275],
+     | 99.00th=[  802], 99.50th=[  877], 99.90th=[  986], 99.95th=[ 1011],
+     | 99.99th=[ 1020]
+   bw (  KiB/s): min=   31, max=  520, per=25.14%, avg=335.10, stdev=108.05, samples=476
+   iops        : min=    7, max=  130, avg=83.62, stdev=27.01, samples=476
+  lat (usec)   : 10=0.01%, 20=0.01%
+  lat (msec)   : 20=0.01%, 50=0.03%, 100=0.11%, 250=93.26%, 500=4.30%
+  lat (msec)   : 750=0.67%, 1000=1.52%
+  cpu          : usr=0.17%, sys=0.47%, ctx=53129, majf=0, minf=56
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.2%, 16=99.7%, 32=0.0%, >=64=0.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.1%, 32=0.0%, 64=0.0%, >=64=0.0%
+     issued rwts: total=0,20029,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=16
+
+Run status group 0 (all jobs):
+  WRITE: bw=1334KiB/s (1366kB/s), 1334KiB/s-1334KiB/s (1366kB/s-1366kB/s), io=78.2MiB (82.0MB), run=60071-60071msec
